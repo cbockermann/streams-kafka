@@ -1,0 +1,124 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>de.sfb876</groupId>
+	<artifactId>streams-kafka</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name>streams-kafka</name>
+	<description>A kafka library for streams.</description>
+
+
+
+	<distributionManagement>
+		<repository>
+			<id>sonatype-releases</id>
+			<name>sonatype Maven Staging Repository</name>
+			<url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+		</repository>
+		<snapshotRepository>
+			<id>sonatype-snapshots</id>
+			<name>sonatype Snapshot Repository</name>
+			<url>https://oss.sonatype.org/content/repositories/snapshots</url>
+		</snapshotRepository>
+	</distributionManagement>
+
+
+
+	<dependencies>
+		<dependency>
+			<groupId>org.jwall</groupId>
+			<artifactId>streams-api</artifactId>
+			<version>[0.9.22,)</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.kafka</groupId>
+			<artifactId>kafka-clients</artifactId>
+			<version>0.8.2.2</version>
+		</dependency>
+		<dependency>
+			<groupId>org.jwall</groupId>
+			<artifactId>streams-runtime</artifactId>
+			<version>[0.9.22,)</version>
+		</dependency>
+		<dependency>
+			<groupId>org.jwall</groupId>
+			<artifactId>streams-core</artifactId>
+			<version>[0.9.22,)</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.kafka</groupId>
+			<artifactId>kafka_2.11</artifactId>
+			<version>0.8.2.2</version>
+		</dependency>
+	</dependencies>
+
+	<profiles>
+		<profile>
+			<id>standalone</id>
+			<activation>
+				<property>
+					<name>standalone</name>
+					<value>true</value>
+				</property>
+			</activation>
+
+
+			<build>
+				<finalName>streams-kafka-standalone</finalName>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-shade-plugin</artifactId>
+						<version>2.4.1</version>
+						<configuration>
+							<filters>
+								<filter>
+									<artifact>log4j:log4j</artifact>
+									<includes>
+										<include>**</include>
+									</includes>
+								</filter>
+								<filter>
+									<artifact>*:*</artifact>
+									<excludes>
+										<exclude>META-INF/*.SF</exclude>
+										<exclude>META-INF/*.DSA</exclude>
+										<exclude>META-INF/*.RSA</exclude>
+									</excludes>
+								</filter>
+							</filters>
+							<transformers>
+								<transformer
+									implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+									<manifestEntries>
+										<Implementation-Vendor>Christian Bockermann
+										</Implementation-Vendor>
+										<Implementation-Title>streams-storm</Implementation-Title>
+										<Implementation-URL>http://www.jwall.org/streams/
+										</Implementation-URL>
+										<Implementation-Version>${project.version}
+										</Implementation-Version>
+										<Implementation-Revision>${project.version}
+										</Implementation-Revision>
+										<Specification-Title>streams-kafka</Specification-Title>
+										<Specification-Version>1.0</Specification-Version>
+										<main-class>stream.run</main-class>
+									</manifestEntries>
+								</transformer>
+							</transformers>
+						</configuration>
+						<executions>
+							<execution>
+								<phase>package</phase>
+								<goals>
+									<goal>shade</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
+
+</project>

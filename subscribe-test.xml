@@ -1,0 +1,15 @@
+<application>
+<!--
+	<stream id="data" class="streams.kafka.TopicStream" />
+	 -->
+	<stream id="data" class="streams.kafka.TopicStream"
+		   topic="test2"
+	 />
+
+	<process input="data">
+		<stream.monitor.DataRate every="1000" />
+		<!--
+	   <PrintData />
+	-->
+	</process>
+</application>

@@ -1,0 +1,13 @@
+<application>
+
+	<stream id="data" class="stream.generator.RandomStream" />
+
+	<process input="data">
+	   <streams.kafka.Publish topic="test2"/>
+	   <stream.monitor.DataRate every="1000" />
+	   <!--
+	   <PrintData />
+	   <stream.flow.Delay time="1s" />
+	-->
+	</process>
+</application>
