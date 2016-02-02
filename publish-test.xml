@@ -1,10 +1,12 @@
 <application>
 
-	<stream id="data" class="stream.generator.RandomStream" />
+	<stream id="data" class="streams.kafka.testing.SyntheticStream" limit="10000000"
+	   samples="10" />
 
 	<process input="data">
-	   <streams.kafka.Publish topic="test2"/>
-	   <stream.monitor.DataRate every="1000" />
+	   <stream.monitor.DataRate id="producer:rate" every="100000" />
+	   <streams.kafka.Publish zookeeper="ls8cb01.cs.uni-dortmund.de" broker="ls8cb01.cs.uni-dortmund.de:9092" 
+	   					topic="test-with-4"/>
 	   <!--
 	   <PrintData />
 	   <stream.flow.Delay time="1s" />

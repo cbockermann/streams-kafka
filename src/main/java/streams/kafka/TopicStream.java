@@ -1,294 +1,167 @@
+/**
+ * 
+ */
 package streams.kafka;
 
-/*
- * #%L
- * Streams Kafka
- * %%
- * Copyright (C) 2013 Thomas Scharrenbach
- * %%
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- * #L%
- */
-
-import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicLong;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.PartitionInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import kafka.consumer.ConsumerConfig;
-import kafka.consumer.ConsumerIterator;
-import kafka.consumer.KafkaStream;
-import kafka.javaapi.consumer.ConsumerConnector;
-import kafka.message.MessageAndMetadata;
-import kafka.serializer.Decoder;
+import stream.Data;
+import stream.annotations.Parameter;
+import stream.data.DataFactory;
 import stream.io.AbstractStream;
+import stream.io.Stream;
+import stream.io.multi.MultiStream;
 import streams.kafka.util.DataItemDecoder;
 import streams.kafka.util.StringObjectDecoder;
 
 /**
- * Kafka consumer for the streams framework.
- * 
- * @author Thomas Scharrenbach
- * @version 0.0.1
- * @since 0.0.1
- * 
+ * @author chris
+ *
  */
-public class TopicStream extends AbstractStream {
+public class TopicStream extends AbstractStream implements MultiStream {
 
-	static Logger log = LoggerFactory.getLogger(TopicStream.class);
+    static Logger log = LoggerFactory.getLogger(TopicStream.class);
 
-	/**
-	 * Streams parameter.
-	 */
-	private String _id;
+    final Data endOfStream = DataFactory.create();
 
-	/**
-	 * Streams parameter.
-	 */
-	private Long _limit;
+    @Parameter(required = true, description = "Zookeeper servers to connect to.")
+    String zookeeper;
 
-	/**
-	 * Created in init.
-	 */
-	private ConsumerConnector _consumer;
+    @Parameter(required = true, description = "Brokers to connect to.")
+    String broker;
 
-	/**
-	 * Created in init.
-	 */
-	private Decoder<stream.Data> _decoder;
+    @Parameter(required = true, description = "The topic to which this stream subscribes.")
+    String topic = "syslog";
 
-	/**
-	 * Streams parameter.
-	 */
-	private String _zooKeeper = "192.168.56.101:2181";
+    final AtomicLong index = new AtomicLong(0L);
+    KafkaConsumer<byte[], byte[]> consumer;
 
-	/**
-	 * Streams parameter.
-	 */
-	private String _groupId = "test";
+    final LinkedBlockingQueue<Data> queue = new LinkedBlockingQueue<Data>();
 
-	/**
-	 * Streams parameter.
-	 */
-	private String _topic = "test";
+    StringObjectDecoder keyCodec = new StringObjectDecoder();
+    DataItemDecoder valueCodec = new DataItemDecoder();
 
-	/**
-	 * Streams parameter.
-	 */
-	private KafkaStream<String, stream.Data> _kafkaStream;
+    final Map<String, Stream> partitions = new LinkedHashMap<String, Stream>();
+    final ArrayList<PartitionInfo> partitionInfos = new ArrayList<PartitionInfo>();
 
-	/**
-	 * Streams parameter.
-	 */
-	private String _decoderFactory;
+    /**
+     * @see stream.io.AbstractStream#init()
+     */
+    @Override
+    public void init() throws Exception {
+        super.init();
 
-	/**
-	 * 
-	 * @version 0.0.1
-	 * @since 0.0.1
-	 * 
-	 * @throws Exception
-	 */
-	public void init() throws Exception {
+        Properties props = new Properties();
+        props.put("zookeeper.connect", zookeeper);
+        props.put("metadata.broker.list", broker);
+        props.put("bootstrap.servers", broker);
+        props.put("group.id", "syslog-group");
+        props.put("value.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        // props.put("session.timeout.ms", "1000");
+        props.put("enable.auto.commit", "true");
+        props.put("auto.commit.interval.ms", "10000");
+        // props.put("partition.assignment.strategy", "range");
+        // props.put("client.id", "syslog-client");
 
-		final ConsumerConfig kafkaConsumerConfig = createConsumerConfig(getZooKeeper(), getGroupId());
-		// Connect to Kafka via the high-level consumer API.
-		_consumer = kafka.consumer.Consumer.createJavaConsumerConnector(kafkaConsumerConfig);
+        log.info("Creating kafka consumer...");
+        final KafkaConsumer<byte[], byte[]> kc = new KafkaConsumer<byte[], byte[]>(props);
+        consumer = kc;
 
-		// Create a new ObjectDecoder from the specified ObjectDecoderFactory.
-		_decoder = new DataItemDecoder();
+        log.info("subscribing to topic '{}'", topic);
+        // consumer.subscribe(topic);
+        consumer.subscribe(Arrays.asList(topic));
+        List<PartitionInfo> partitions = consumer.partitionsFor(topic);
 
-		// Declare how many threads we are going to use for the single topic
-		// which is exposed to the Streams framework.
-		// TODO Currently this is only possible single-threaded.
-		final Map<String, Integer> topicCountMap = new HashMap<String, Integer>();
-		topicCountMap.put(getTopic(), 1);
+        this.partitionInfos.clear();
+        this.partitionInfos.addAll(partitions);
 
-		// Currently, we allow for String keys only.
-		final Decoder<String> keyDecoder = new StringObjectDecoder();
+        for (PartitionInfo info : partitionInfos) {
+            log.info("partition  '{}:{}' => {}", topic, info.partition(), info.leader());
+        }
 
-		log.info("Subscribing to topic {}", getTopic());
-		// Extract the single Kafka stream.
-		final List<KafkaStream<String, stream.Data>> kafkaStreamsList = _consumer
-				.createMessageStreams(topicCountMap, keyDecoder, _decoder).get(getTopic());
-		_kafkaStream = kafkaStreamsList.get(0);
+        Thread t = new Thread() {
+            public void run() {
+                try {
+                    while (true) {
+                        ConsumerRecords<byte[], byte[]> messages = consumer.poll(100L);
+                        log.info("Polled new messages: {}", messages);
+                        while (messages == null || messages.count() < 1) {
+                            messages = consumer.poll(1000L);
+                            log.info("Polled new messages: {}", messages);
+                        }
 
-	}
+                        Iterator<ConsumerRecord<byte[], byte[]>> it = messages.iterator();
+                        while (it.hasNext()) {
+                            ConsumerRecord<byte[], byte[]> record = it.next();
 
-	/**
-	 * <p>
-	 * Read data from the Kafka consumer and convert it to a {@link stream.Data}
-	 * item.
-	 * </p>
-	 * <p>
-	 * This implementation is non-blocking, i.e., it returns null, if the Kafka
-	 * queue has no items.
-	 * </p>
-	 * 
-	 * @version 0.0.1
-	 * @since 0.0.1
-	 */
-	@Override
-	public stream.Data readNext() throws Exception {
-		final ConsumerIterator<String, stream.Data> kafkaIt = _kafkaStream.iterator();
-		if (kafkaIt.hasNext()) {
-			MessageAndMetadata<String, stream.Data> nextMessage = kafkaIt.next();
-			return nextMessage.message();
-		} else {
-			return null;
-		}
-	}
+                            String key = keyCodec.fromBytes(record.key());
+                            Data item = valueCodec.fromBytes(record.value());
 
-	/**
-	 * 
-	 * @version 0.0.1
-	 * @since 0.0.1
-	 */
-	@Override
-	@stream.annotations.Parameter
-	public void setId(String id) {
-		_id = id;
-	}
+                            int part = record.partition();
 
-	/**
-	 * 
-	 * @version 0.0.1
-	 * @since 0.0.1
-	 */
-	@Override
-	public String getId() {
-		return _id;
-	}
+                            log.info("{}:{}   =>   {}, {}", topic, part, key, item);
+                            enqueue(key, item);
+                        }
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
 
-	/**
-	 * 
-	 * @version 0.0.1
-	 * @since 0.0.1
-	 */
-	@Override
-	@stream.annotations.Parameter
-	public void setLimit(Long limit) {
-		_limit = limit;
-	}
+                queue.add(endOfStream);
+            }
+        };
 
-	/**
-	 * 
-	 * @version 0.0.1
-	 * @since 0.0.1
-	 */
-	@Override
-	public Long getLimit() {
-		return _limit;
-	}
+        t.setDaemon(true);
+        t.start();
+    }
 
-	/**
-	 * 
-	 * @version 0.0.1
-	 * @since 0.0.1
-	 */
-	@stream.annotations.Parameter
-	public void setDecoder(String decoder) {
-		_decoderFactory = decoder;
-	}
+    protected void enqueue(String key, Data item) {
+        queue.add(item);
+    }
 
-	/**
-	 * 
-	 * @version 0.0.1
-	 * @since 0.0.1
-	 */
-	public String getDecoder() {
-		return _decoderFactory;
-	}
+    /**
+     * @see stream.io.AbstractStream#readNext()
+     */
+    @Override
+    public Data readNext() throws Exception {
+        Data item = queue.take();
+        if (item == endOfStream) {
+            return null;
+        }
+        return item;
+    }
 
-	/**
-	 * 
-	 * @version 0.0.1
-	 * @since 0.0.1
-	 */
-	@stream.annotations.Parameter(description = "The Kafka topic to be consumed as a Streams stream.", required = true)
-	public void setTopic(String topic) {
-		_topic = topic;
-	}
+    /**
+     * @see stream.io.multi.MultiStream#addStream(java.lang.String,
+     *      stream.io.Stream)
+     */
+    @Override
+    public void addStream(String id, Stream stream) {
+        throw new UnsupportedOperationException("Adding new substreams is not allowed for this stream implementation!");
+    }
 
-	/**
-	 * 
-	 * @version 0.0.1
-	 * @since 0.0.1
-	 */
-	public String getTopic() {
-		return _topic;
-	}
-
-	/**
-	 * 
-	 * @version 0.0.1
-	 * @since 0.0.1
-	 */
-	@stream.annotations.Parameter
-	public void setZooKeeper(String zooKeeper) {
-		_zooKeeper = zooKeeper;
-	}
-
-	/**
-	 * 
-	 * @version 0.0.1
-	 * @since 0.0.1
-	 */
-	public String getZooKeeper() {
-		return _zooKeeper;
-	}
-
-	/**
-	 * 
-	 * @version 0.0.1
-	 * @since 0.0.1
-	 */
-	@stream.annotations.Parameter
-	public void setGroupId(String groupId) {
-		_groupId = groupId;
-	}
-
-	/**
-	 * 
-	 * @version 0.0.1
-	 * @since 0.0.1
-	 */
-	public String getGroupId() {
-		return _groupId;
-	}
-
-	//
-	// Static methods
-	//
-
-	/**
-	 * Create {@link ConsumerConfig}.
-	 * 
-	 * @param zookeeperChroot
-	 * @param groupId
-	 * @return
-	 */
-	private static ConsumerConfig createConsumerConfig(String zookeeperChroot, String groupId) {
-		Properties props = new Properties();
-		props.put("zookeeper.connect", zookeeperChroot);
-		props.put("group.id", groupId);
-		props.put("zookeeper.session.timeout.ms", "400");
-		props.put("zookeeper.sync.time.ms", "200");
-		props.put("auto.commit.interval.ms", "1000");
-		return new ConsumerConfig(props);
-	}
+    /**
+     * @see stream.io.multi.MultiStream#getStreams()
+     */
+    @Override
+    public Map<String, Stream> getStreams() {
+        return Collections.unmodifiableMap(partitions);
+    }
 }

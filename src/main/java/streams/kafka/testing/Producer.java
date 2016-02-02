@@ -1,13 +1,14 @@
 /**
  * 
  */
-package streams.kafka;
+package streams.kafka.testing;
 
 import stream.Data;
 import stream.ProcessContext;
 import stream.generator.RandomStream;
 import stream.io.Stream;
 import stream.runtime.ProcessContextImpl;
+import streams.kafka.Publish;
 
 /**
  * @author chris

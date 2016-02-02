@@ -3,16 +3,20 @@
  */
 package streams.kafka;
 
-import java.io.ByteArrayOutputStream;
+import java.io.Serializable;
 import java.util.Properties;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import stream.AbstractProcessor;
 import stream.Data;
 import stream.ProcessContext;
-import stream.util.JavaSerializer;
+import stream.annotations.Parameter;
+import streams.codec.Codec;
+import streams.kafka.util.CodecUtils;
 
 /**
  * @author chris
@@ -20,109 +24,177 @@ import stream.util.JavaSerializer;
  */
 public class Publish extends AbstractProcessor {
 
-	String zookeeper = "192.168.56.101:2181";
-	String broker = "192.168.56.101:9092";
-	String topic = "test";
+    static Logger log = LoggerFactory.getLogger(Publish.class);
 
-	KafkaProducer<byte[], byte[]> producer;
+    @Parameter(description = "This parameter specifies the key, which is used to determine the partition to which an item is publisehd, default is random partitioning.", required = false)
+    String partitionKey = null;
 
-	/**
-	 * @see stream.AbstractProcessor#init(stream.ProcessContext)
-	 */
-	@Override
-	public void init(ProcessContext ctx) throws Exception {
-		super.init(ctx);
+    @Parameter(description = "The zookeeper server(s), which should be used, separated by commas.", required = true)
+    String zookeeper = null;
 
-		Properties props = new Properties();
-		props.put("zookeeper.connect", zookeeper);
-		props.put("metadata.broker.list", broker);
-		props.put("bootstrap.servers", broker);
-		props.put("group.id", "test");
-		props.put("value.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer");
-		props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-		props.put("session.timeout.ms", "1000");
-		props.put("enable.auto.commit", "true");
-		props.put("auto.commit.interval.ms", "10000");
+    @Parameter(description = "The list of brokers, to which to connect, separated by commas.", required = false)
+    String broker = null;
 
-		producer = new KafkaProducer<byte[], byte[]>(props);
-	}
+    @Parameter(description = "The topic to which messages should be published.", required = true)
+    String topic = null;
 
-	public ProducerRecord<byte[], byte[]> createMessage(Data item) {
-		try {
-			JavaSerializer serializer = new JavaSerializer();
+    @Parameter(description = "The group id of the publisher, default is 'test'.")
+    String groupId = "test";
 
-			ByteArrayOutputStream baos = new ByteArrayOutputStream();
-			serializer.write(item, baos);
-			baos.close();
+    @Parameter(description = "The class used for encoding data items to byte messages, default is 'stream.io.JavaCodec'.")
+    String codec = "streams.codec.DefaultCodec";
 
-			byte[] value = baos.toByteArray();
-			return new ProducerRecord<byte[], byte[]>(topic, value);
+    Codec<Data> encoder;
 
-		} catch (Exception e) {
-			e.printStackTrace();
-			return null;
-		}
+    KafkaProducer<Serializable, byte[]> producer;
 
-	}
+    /**
+     * @see stream.AbstractProcessor#init(stream.ProcessContext)
+     */
+    @Override
+    public void init(ProcessContext ctx) throws Exception {
+        super.init(ctx);
 
-	/**
-	 * @see stream.Processor#process(stream.Data)
-	 */
-	@Override
-	public Data process(Data input) {
-		try {
-			ProducerRecord<byte[], byte[]> message = this.createMessage(input);
-			if (message != null) {
-				producer.send(message);
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		return input;
-	}
+        Properties props = new Properties();
+        props.put("zookeeper.connect", zookeeper);
+        if (broker != null) {
+            props.put("metadata.broker.list", broker);
+            props.put("bootstrap.servers", broker);
+        }
+        props.put("group.id", groupId);
+        props.put("value.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer");
+        props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        props.put("session.timeout.ms", "1000");
+        props.put("enable.auto.commit", "true");
+        props.put("auto.commit.interval.ms", "10000");
 
-	/**
-	 * @return the zookeeper
-	 */
-	public String getZookeeper() {
-		return zookeeper;
-	}
+        // ZkClient zk = new ZkClient(zookeeper);
+        //
+        // if (!AdminUtils.topicExists(zk, topic)) {
+        // log.error("Topic '{}' does not exists, if we believe Mr. Zookeeper at
+        // {}.", topic, zookeeper);
+        // throw new Exception("Topic '" + topic + "' does not exist!");
+        // }
+        //
+        producer = new KafkaProducer<Serializable, byte[]>(props);
 
-	/**
-	 * @param zookeeper
-	 *            the zookeeper to set
-	 */
-	public void setZookeeper(String zookeeper) {
-		this.zookeeper = zookeeper;
-	}
+        log.info("Creating codec from '{}'", this.codec);
+        encoder = CodecUtils.create(codec);
+        // List<PartitionInfo> parts = producer.partitionsFor(topic);
+    }
 
-	/**
-	 * @return the broker
-	 */
-	public String getBroker() {
-		return broker;
-	}
+    public ProducerRecord<Serializable, byte[]> createMessage(Data item) {
+        try {
+            byte[] value = encoder.encode(item);
 
-	/**
-	 * @param broker
-	 *            the broker to set
-	 */
-	public void setBroker(String broker) {
-		this.broker = broker;
-	}
+            Serializable key = null;
 
-	/**
-	 * @return the topic
-	 */
-	public String getTopic() {
-		return topic;
-	}
+            if (partitionKey != null) {
+                key = item.get(partitionKey);
+                if (key == null) {
+                    key = "null";
+                }
+                return new ProducerRecord<Serializable, byte[]>(topic, key, value);
 
-	/**
-	 * @param topic
-	 *            the topic to set
-	 */
-	public void setTopic(String topic) {
-		this.topic = topic;
-	}
+            } else {
+                return new ProducerRecord<Serializable, byte[]>(topic, value);
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+
+    }
+
+    /**
+     * @see stream.Processor#process(stream.Data)
+     */
+    @Override
+    public Data process(Data input) {
+        try {
+            ProducerRecord<Serializable, byte[]> message = this.createMessage(input);
+            if (message != null) {
+                producer.send(message);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return input;
+    }
+
+    /**
+     * @return the zookeeper
+     */
+    public String getZookeeper() {
+        return zookeeper;
+    }
+
+    /**
+     * @param zookeeper
+     *            the zookeeper to set
+     */
+    public void setZookeeper(String zookeeper) {
+        this.zookeeper = zookeeper;
+    }
+
+    /**
+     * @return the broker
+     */
+    public String getBroker() {
+        return broker;
+    }
+
+    /**
+     * @param broker
+     *            the broker to set
+     */
+    public void setBroker(String broker) {
+        this.broker = broker;
+    }
+
+    /**
+     * @return the groupId
+     */
+    public String getGroupId() {
+        return groupId;
+    }
+
+    /**
+     * @param groupId
+     *            the groupId to set
+     */
+    public void setGroupId(String groupId) {
+        this.groupId = groupId;
+    }
+
+    /**
+     * @return the partitionKey
+     */
+    public String getPartitionKey() {
+        return partitionKey;
+    }
+
+    /**
+     * @param partitionKey
+     *            the partitionKey to set
+     */
+    public void setPartitionKey(String partitionKey) {
+        this.partitionKey = partitionKey;
+    }
+
+    /**
+     * @return the codec
+     */
+    public String getCodec() {
+        return codec;
+    }
+
+    /**
+     * @param codec
+     *            the codec to set
+     */
+    public void setCodec(String codec) {
+        this.codec = codec;
+    }
 }

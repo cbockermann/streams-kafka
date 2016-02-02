@@ -3,11 +3,13 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>de.sfb876</groupId>
 	<artifactId>streams-kafka</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>0.0.2-SNAPSHOT</version>
 	<name>streams-kafka</name>
 	<description>A kafka library for streams.</description>
 
-
+	<properties>
+		<streams.version>0.9.25-SNAPSHOT</streams.version>
+	</properties>
 
 	<distributionManagement>
 		<repository>
@@ -26,30 +28,30 @@
 
 	<dependencies>
 		<dependency>
-			<groupId>org.jwall</groupId>
-			<artifactId>streams-api</artifactId>
-			<version>[0.9.22,)</version>
-		</dependency>
-		<dependency>
 			<groupId>org.apache.kafka</groupId>
 			<artifactId>kafka-clients</artifactId>
-			<version>0.8.2.2</version>
+			<version>0.9.0.0</version>
 		</dependency>
 		<dependency>
-			<groupId>org.jwall</groupId>
+			<groupId>de.sfb876</groupId>
 			<artifactId>streams-runtime</artifactId>
-			<version>[0.9.22,)</version>
+			<version>${streams.version}</version>
 		</dependency>
 		<dependency>
-			<groupId>org.jwall</groupId>
+			<groupId>de.sfb876</groupId>
 			<artifactId>streams-core</artifactId>
-			<version>[0.9.22,)</version>
+			<version>${streams.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.kafka</groupId>
 			<artifactId>kafka_2.11</artifactId>
-			<version>0.8.2.2</version>
+			<version>0.9.0.0</version>
 		</dependency>
+        <dependency>
+            <groupId>com.esotericsoftware</groupId>
+            <artifactId>kryo-shaded</artifactId>
+            <version>3.0.3</version>
+        </dependency>
 	</dependencies>
 
 	<profiles>
