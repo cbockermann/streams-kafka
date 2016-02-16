@@ -34,7 +34,7 @@ public class Test {
 
         String zookeeper = "ls8cb01.cs.uni-dortmund.de";
         ZkClient zk = new ZkClient(zookeeper, Integer.MAX_VALUE, 60000, kafka.utils.ZKStringSerializer$.MODULE$);
-        String topic = "test-with-4";
+        String topic = "test-with-6";
 
         ZkUtils zkUtils = new ZkUtils(zk, new ZkConnection(zookeeper), false);
 

@@ -4,10 +4,12 @@
 package streams.kafka;
 
 import java.io.Serializable;
+import java.util.List;
 import java.util.Properties;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.PartitionInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,26 +29,28 @@ public class Publish extends AbstractProcessor {
     static Logger log = LoggerFactory.getLogger(Publish.class);
 
     @Parameter(description = "This parameter specifies the key, which is used to determine the partition to which an item is publisehd, default is random partitioning.", required = false)
-    String partitionKey = null;
+    protected String partitionKey = null;
 
     @Parameter(description = "The zookeeper server(s), which should be used, separated by commas.", required = true)
-    String zookeeper = null;
+    protected String zookeeper = null;
 
     @Parameter(description = "The list of brokers, to which to connect, separated by commas.", required = false)
-    String broker = null;
+    protected String broker = null;
 
     @Parameter(description = "The topic to which messages should be published.", required = true)
-    String topic = null;
+    protected String topic = null;
 
     @Parameter(description = "The group id of the publisher, default is 'test'.")
     String groupId = "test";
 
     @Parameter(description = "The class used for encoding data items to byte messages, default is 'stream.io.JavaCodec'.")
-    String codec = "streams.codec.DefaultCodec";
+    protected String codec = "streams.codec.DefaultCodec";
 
     Codec<Data> encoder;
 
     KafkaProducer<Serializable, byte[]> producer;
+
+    int[] partitions;
 
     /**
      * @see stream.AbstractProcessor#init(stream.ProcessContext)
@@ -61,22 +65,22 @@ public class Publish extends AbstractProcessor {
             props.put("metadata.broker.list", broker);
             props.put("bootstrap.servers", broker);
         }
-        props.put("group.id", groupId);
         props.put("value.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer");
         props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
         props.put("session.timeout.ms", "1000");
         props.put("enable.auto.commit", "true");
         props.put("auto.commit.interval.ms", "10000");
 
-        // ZkClient zk = new ZkClient(zookeeper);
-        //
-        // if (!AdminUtils.topicExists(zk, topic)) {
-        // log.error("Topic '{}' does not exists, if we believe Mr. Zookeeper at
-        // {}.", topic, zookeeper);
-        // throw new Exception("Topic '" + topic + "' does not exist!");
-        // }
-        //
         producer = new KafkaProducer<Serializable, byte[]>(props);
+
+        log.info("Found partitions:");
+        List<PartitionInfo> parts = producer.partitionsFor(topic);
+        this.partitions = new int[parts.size()];
+        for (int idx = 0; idx < parts.size(); idx++) {
+            PartitionInfo part = parts.get(idx);
+            log.info("   partition {}:{}", part.topic(), part.partition());
+            partitions[idx] = part.partition();
+        }
 
         log.info("Creating codec from '{}'", this.codec);
         encoder = CodecUtils.create(codec);
@@ -87,18 +91,17 @@ public class Publish extends AbstractProcessor {
         try {
             byte[] value = encoder.encode(item);
 
-            Serializable key = null;
-
-            if (partitionKey != null) {
+            Serializable key;
+            if (partitionKey != null && item.get(partitionKey) != null) {
                 key = item.get(partitionKey);
-                if (key == null) {
-                    key = "null";
-                }
-                return new ProducerRecord<Serializable, byte[]>(topic, key, value);
-
             } else {
-                return new ProducerRecord<Serializable, byte[]>(topic, value);
+                key = System.currentTimeMillis() + "";
             }
+
+            int part = partitions[key.hashCode() % partitions.length];
+            // log.info(" {} ~> {}", key, part);
+            log.debug("Creating record for {}:{}", topic, part);
+            return new ProducerRecord<Serializable, byte[]>(topic, part, key, value);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -114,6 +117,7 @@ public class Publish extends AbstractProcessor {
     public Data process(Data input) {
         try {
             ProducerRecord<Serializable, byte[]> message = this.createMessage(input);
+            log.debug("Sending message {}", message);
             if (message != null) {
                 producer.send(message);
             }
@@ -151,21 +155,6 @@ public class Publish extends AbstractProcessor {
      */
     public void setBroker(String broker) {
         this.broker = broker;
-    }
-
-    /**
-     * @return the groupId
-     */
-    public String getGroupId() {
-        return groupId;
-    }
-
-    /**
-     * @param groupId
-     *            the groupId to set
-     */
-    public void setGroupId(String groupId) {
-        this.groupId = groupId;
     }
 
     /**
