@@ -3,12 +3,13 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>de.sfb876</groupId>
 	<artifactId>streams-kafka</artifactId>
-	<version>0.0.2-SNAPSHOT</version>
+	<version>0.0.3-SNAPSHOT</version>
 	<name>streams-kafka</name>
 	<description>A kafka library for streams.</description>
 
 	<properties>
-		<streams.version>0.9.25-SNAPSHOT</streams.version>
+		<streams.version>[0.9.25,)</streams.version>
+		<kafka.version>[0.9.0.0,)</kafka.version>
 	</properties>
 
 	<distributionManagement>
@@ -24,13 +25,18 @@
 		</snapshotRepository>
 	</distributionManagement>
 
-
+	<scm>
+		<url>https://bitbucket.org/cbockermann/streams-kafka</url>
+		<developerConnection>scm:git:ssh://git@bitbucket.org/cbockermann/streams-kafka</developerConnection>
+		<connection>scm:git:ssh://git@bitbucket.org/cbockermann/streams-kafka</connection>
+	  <tag>HEAD</tag>
+  	</scm>
 
 	<dependencies>
 		<dependency>
 			<groupId>org.apache.kafka</groupId>
 			<artifactId>kafka-clients</artifactId>
-			<version>0.9.0.0</version>
+			<version>${kafka.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>de.sfb876</groupId>

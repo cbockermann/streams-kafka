@@ -98,7 +98,12 @@ public class Publish extends AbstractProcessor {
                 key = System.currentTimeMillis() + "";
             }
 
-            int part = partitions[key.hashCode() % partitions.length];
+            int part = 0;
+            int idx = key.hashCode() % partitions.length;
+            if (idx >= 0 && idx < partitions.length) {
+                part = partitions[key.hashCode() % partitions.length];
+            }
+
             // log.info(" {} ~> {}", key, part);
             log.debug("Creating record for {}:{}", topic, part);
             return new ProducerRecord<Serializable, byte[]>(topic, part, key, value);
