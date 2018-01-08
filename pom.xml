@@ -1,15 +1,15 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>de.sfb876</groupId>
 	<artifactId>streams-kafka</artifactId>
-	<version>0.0.3-SNAPSHOT</version>
+	<version>0.0.3</version>
 	<name>streams-kafka</name>
 	<description>A kafka library for streams.</description>
 
 	<properties>
 		<streams.version>[0.9.25,)</streams.version>
 		<kafka.version>[0.9.0.0,)</kafka.version>
+		<skipTests>true</skipTests>
 	</properties>
 
 	<distributionManagement>
@@ -29,7 +29,7 @@
 		<url>https://bitbucket.org/cbockermann/streams-kafka</url>
 		<developerConnection>scm:git:ssh://git@bitbucket.org/cbockermann/streams-kafka</developerConnection>
 		<connection>scm:git:ssh://git@bitbucket.org/cbockermann/streams-kafka</connection>
-	  <tag>HEAD</tag>
+	  <tag>streams-kafka-0.0.3</tag>
   	</scm>
 
 	<dependencies>
@@ -57,6 +57,12 @@
             <groupId>com.esotericsoftware</groupId>
             <artifactId>kryo-shaded</artifactId>
             <version>3.0.3</version>
+        </dependency>
+        <dependency>
+        	<groupId>org.slf4j</groupId>
+        	<artifactId>slf4j-log4j12</artifactId>
+        	<version>1.7.2</version>
+        	<scope>test</scope>
         </dependency>
 	</dependencies>
 
@@ -96,8 +102,7 @@
 								</filter>
 							</filters>
 							<transformers>
-								<transformer
-									implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
 									<manifestEntries>
 										<Implementation-Vendor>Christian Bockermann
 										</Implementation-Vendor>
